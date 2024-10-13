@@ -1,42 +1,37 @@
 const fs = require('fs');
 const path = require('path');
 
-const assetsDirectory = path.join(__dirname, 'assets');
-const outputFilePath = path.join(__dirname, 'partsList.json');
+// Paths to your assets folders
+const assetsDir = path.join(__dirname, 'assets');
+const bordersDir = path.join(assetsDir, 'Borders');
+const cellsDir = path.join(assetsDir, 'Cells');
+const numbersDir = path.join(assetsDir, 'Numbers');
+const additionalNumbersDir = path.join(assetsDir, 'AdditionalNumbers');
 
-const partCategories = {
-    borders: [],
-    cells: [],
-    numbers: []
+// Helper function to read directory and return sorted file names without extensions
+function getFileNames(directory) {
+    return fs.readdirSync(directory)
+        .filter(file => path.extname(file) === '.gltf') // Only include .gltf files
+        .map(file => path.basename(file, '.gltf')) // Remove file extensions
+        .sort();
+}
+
+// Fetch parts from directories
+const borders = getFileNames(bordersDir);
+const cells = getFileNames(cellsDir);
+const numbers = getFileNames(numbersDir);
+const additionalNumbers = getFileNames(additionalNumbersDir);
+
+// Create the partsList object
+const partsList = {
+    borders,
+    cells,
+    numbers,
+    notes: additionalNumbers  // Include additional numbers under "notes"
 };
 
-function categorizeFile(fileName, category) {
-    if (fileName.includes('Major_Border') || fileName.includes('Minor_Border')) {
-        category.borders.push(fileName.replace('.gltf', ''));
-    } else if (fileName.includes('Cell') && !fileName.includes('Number')) {
-        category.cells.push(fileName.replace('.gltf', ''));
-    } else if (fileName.includes('Number')) {
-        category.numbers.push(fileName.replace('.gltf', ''));
-    }
-}
+// Write to partsList.json
+const outputPath = path.join(__dirname, 'partsList.json');
+fs.writeFileSync(outputPath, JSON.stringify(partsList, null, 2));
 
-function readDirectory(directoryPath, category) {
-    const items = fs.readdirSync(directoryPath);
-
-    items.forEach(item => {
-        const itemPath = path.join(directoryPath, item);
-        const stats = fs.statSync(itemPath);
-
-        if (stats.isDirectory()) {
-            readDirectory(itemPath, category);
-        } else if (stats.isFile() && path.extname(item) === '.gltf') {
-            categorizeFile(item, category);
-        }
-    });
-}
-
-readDirectory(assetsDirectory, partCategories);
-
-fs.writeFileSync(outputFilePath, JSON.stringify(partCategories, null, 2));
-
-console.log(`Parts list has been successfully created at ${outputFilePath}`);
+console.log('partsList.json has been created/updated successfully.');

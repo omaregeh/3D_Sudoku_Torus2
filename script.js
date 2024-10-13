@@ -1,8 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Define sudokuSolution globally
     let sudokuSolution = [];
 
-    // Set up the scene, camera, and renderer
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.01, 100);
     camera.position.set(0, 5, 3);
@@ -22,12 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const cellsGroup = new THREE.Group();
     const bordersGroup = new THREE.Group();
     const numbersGroup = new THREE.Group();
+    const notesGroup = new THREE.Group();
     cellsGroup.scale.set(5, 5, 5);
     bordersGroup.scale.set(5, 5, 5);
     numbersGroup.scale.set(5, 5, 5);
+    notesGroup.scale.set(5, 5, 5);
     scene.add(cellsGroup);
     scene.add(bordersGroup);
     scene.add(numbersGroup);
+    scene.add(notesGroup);
 
     const controls = new THREE.TrackballControls(camera, renderer.domElement);
     controls.rotateSpeed = 5.0;
@@ -35,13 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     controls.noZoom = true;
     controls.noPan = true;
     controls.target.set(0, 0, 0);
-    const originalUpdate = controls.update;
-    controls.update = function () {
-        controls.target.set(0, 0, 0);
-        originalUpdate.call(controls);
-    };
+    controls.update();
 
-    // Loading JSON files
     Promise.all([
         fetch('partsList.json').then(response => response.json()),
         fetch('sudokuGame.json').then(response => response.json())
@@ -49,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const { borders, cells, numbers } = partsListData;
         const { sudokuBoard, sudokuSolution: solution } = sudokuGameData;
 
-        // Assign sudokuSolution to the global variable
         sudokuSolution = solution;
 
         loadParts(borders, 'assets/Borders', bordersGroup);
@@ -57,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadParts(numbers, 'assets/Numbers', numbersGroup, 0x000000, false);
 
         setupSudokuMechanics(cells, sudokuBoard);
+        addNotesToEmptyCells(cells, sudokuBoard);
     }).catch(error => console.error('Error loading parts list or Sudoku game:', error));
 
     function loadParts(partNames, folderPath, group, materialColor = null, initiallyVisible = true) {
@@ -74,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
                 group.add(part);
+                console.log(`Loaded ${partName}`);  // Debugging to ensure correct loading
             }, undefined, (error) => {
                 console.error(`Error loading ${partName}:`, error);
             });
@@ -84,6 +81,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Adjusted to match your sub-grid naming
+    const subGridMapping = {
+        "Sub_1": { startRow: 0, startCol: 0 },
+        "Sub_2": { startRow: 0, startCol: 3 },
+        "Sub_3": { startRow: 0, startCol: 6 },
+        "Sub_4": { startRow: 3, startCol: 0 },
+        "Sub_5": { startRow: 3, startCol: 3 },
+        "Sub_6": { startRow: 3, startCol: 6 },
+        "Sub_7": { startRow: 6, startCol: 0 },
+        "Sub_8": { startRow: 6, startCol: 3 },
+        "Sub_9": { startRow: 6, startCol: 6 }
+    };
+
+    const editableCells = new Set();
+    const cellNumberMap = new Map();
+    let userSudokuBoard = [];
+
     function parseCellName(cellName) {
         const match = cellName.match(/(Sub_\d+)_Cell_(\d+_\d+)/);
         if (match) {
@@ -92,32 +106,19 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(`Invalid cell name: ${cellName}`);
     }
 
-    const editableCells = new Set();
-    const cellNumberMap = new Map();
-    let userSudokuBoard = [];
-
     function setupSudokuMechanics(cells, sudokuBoard) {
-        userSudokuBoard = JSON.parse(JSON.stringify(sudokuBoard)); // Copy of initial board
+        userSudokuBoard = JSON.parse(JSON.stringify(sudokuBoard));
 
-        const subGridMapping = {
-            "Sub_1": { startRow: 0, startCol: 0 },
-            "Sub_2": { startRow: 0, startCol: 3 },
-            "Sub_3": { startRow: 0, startCol: 6 },
-            "Sub_4": { startRow: 3, startCol: 0 },
-            "Sub_5": { startRow: 3, startCol: 3 },
-            "Sub_6": { startRow: 3, startCol: 6 },
-            "Sub_7": { startRow: 6, startCol: 0 },
-            "Sub_8": { startRow: 6, startCol: 3 },
-            "Sub_9": { startRow: 6, startCol: 6 }
-        };
-
-        cells.forEach((cellName, index) => {
+        cells.forEach((cellName) => {
             const [sub, cell] = parseCellName(cellName);
             const { startRow, startCol } = subGridMapping[sub];
             const [subRow, subCol] = cell.split('_').map(Number);
             const row = startRow + (subRow - 1);
             const col = startCol + (subCol - 1);
             const value = sudokuBoard[row][col];
+
+            console.log(`DEBUG - ${cellName}: Value in Board - ${value}, Row: ${row}, Col: ${col}`);  // Log value in board
+            
             if (value === 0) {
                 editableCells.add(cellName);
             } else {
@@ -126,6 +127,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadParts([numberName], 'assets/Numbers', numbersGroup, 0x000000, true);
             }
         });
+    }
+
+    function addNotesToEmptyCells(cells, sudokuBoard) {
+        cells.forEach((cellName) => {
+            const [sub, cell] = parseCellName(cellName);
+            const { startRow, startCol } = subGridMapping[sub];
+            const [subRow, subCol] = cell.split('_').map(Number);
+            const row = startRow + (subRow - 1);
+            const col = startCol + (subCol - 1);
+
+            if (sudokuBoard[row][col] === 0) {
+                const possibleNumbers = getPossibleNumbers(row, col, sudokuBoard);
+                possibleNumbers.forEach(num => {
+                    const noteName = `${cellName}_New_Number_${num}`;
+                    loadParts([noteName], 'assets/AdditionalNumbers', notesGroup, 0x808080, true);
+                    console.log(`DEBUG - Note Added to ${cellName}: ${noteName}`);  // Debugging to track notes
+                });
+            }
+        });
+    }
+
+    function getPossibleNumbers(row, col, board) {
+        const possible = new Set(Array.from({ length: 9 }, (_, i) => i + 1));
+        for (let i = 0; i < 9; i++) {
+            possible.delete(board[row][i]);
+            possible.delete(board[i][col]);
+        }
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let i = boxRow; i < boxRow + 3; i++) {
+            for (let j = boxCol; j < boxCol + 3; j++) {
+                possible.delete(board[i][j]);
+            }
+        }
+        return Array.from(possible);
     }
 
     const raycaster = new THREE.Raycaster();
@@ -167,28 +203,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const cellName = selectedCell.name;
             const numberToShow = `${cellName}_Number_${event.key}`;
 
-            // Update the user's board
             const [sub, cell] = parseCellName(cellName);
-            const subGridMapping = {
-                "Sub_1": { startRow: 0, startCol: 0 },
-                "Sub_2": { startRow: 0, startCol: 3 },
-                "Sub_3": { startRow: 0, startCol: 6 },
-                "Sub_4": { startRow: 3, startCol: 0 },
-                "Sub_5": { startRow: 3, startCol: 3 },
-                "Sub_6": { startRow: 3, startCol: 6 },
-                "Sub_7": { startRow: 6, startCol: 0 },
-                "Sub_8": { startRow: 6, startCol: 3 },
-                "Sub_9": { startRow: 6, startCol: 6 }
-            };
             const { startRow, startCol } = subGridMapping[sub];
             const [subRow, subCol] = cell.split('_').map(Number);
             const row = startRow + (subRow - 1);
             const col = startCol + (subCol - 1);
 
             userSudokuBoard[row][col] = parseInt(event.key);
-
-            // Log the input and its location
-            console.log(`Input number: ${event.key}, in cell: ${cellName}, row: ${row}, col: ${col}`);
 
             if (cellNumberMap.get(cellName) === numberToShow) {
                 numbersGroup.children.forEach((number) => {
@@ -220,21 +241,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 cellNumberMap.set(cellName, numberToShow);
             }
 
-            // Check if the Sudoku is complete
+            updateNotes(row, col, event.key);
+
             if (checkIfSudokuComplete()) {
                 setTimeout(() => {
                     alert("Congratulations! You've completed the Sudoku!");
                 }, 100);
-            } else {
-                // Check if there are incorrect values
-                if (checkIfSudokuIncorrect()) {
-                    setTimeout(() => {
-                        alert("Oops, there are some incorrect values. Try again!");
-                    }, 100);
-                }
             }
         }
     });
+
+    function updateNotes(row, col, value) {
+        for (let i = 0; i < 9; i++) {
+            removeNoteFromCell(row, i, value);
+            removeNoteFromCell(i, col, value);
+        }
+
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let i = boxRow; i < boxRow + 3; i++) {
+            for (let j = boxCol; j < boxCol + 3; j++) {
+                removeNoteFromCell(i, j, value);
+            }
+        }
+    }
+
+    function removeNoteFromCell(row, col, value) {
+        const cellName = `Sub_${Math.floor(row / 3) * 3 + Math.floor(col / 3) + 1}_Cell_${(row % 3) + 1}_${(col % 3) + 1}`;
+        const noteName = `${cellName}_New_Number_${value}`;
+        notesGroup.children.forEach((note) => {
+            if (note.name === noteName) {
+                note.traverse((child) => {
+                    if (child.isMesh) child.visible = false;
+                });
+                console.log(`DEBUG - Note removed from ${cellName}: ${noteName}`);  // Debug removal
+            }
+        });
+    }
 
     function checkIfSudokuComplete() {
         for (let row = 0; row < 9; row++) {
@@ -245,17 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         return true;
-    }
-
-    function checkIfSudokuIncorrect() {
-        for (let row = 0; row < 9; row++) {
-            for (let col = 0; col < 9; col++) {
-                if (userSudokuBoard[row][col] !== 0 && userSudokuBoard[row][col] !== sudokuSolution[row][col]) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     function animate() {
