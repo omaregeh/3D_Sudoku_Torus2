@@ -52,13 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
         sudokuSolution = solution;
 
         loadParts(borders, 'assets/Borders', bordersGroup);
-        loadParts(cells, 'assets/Cells', cellsGroup);
+        loadParts(cells, 'assets/Cells', cellsGroup, 0xFFFFFF); // Cells set to white
         loadParts(numbers, 'assets/Numbers', numbersGroup, 0x000000, false);
 
         setupSudokuMechanics(cells, sudokuBoard);
         addNotesToEmptyCells(cells, sudokuBoard);  // Add notes to empty cells
     }).catch(error => console.error('Error loading parts list or Sudoku game:', error));
 
+    // Function to load parts with color customization
     function loadParts(partNames, folderPath, group, materialColor = null, initiallyVisible = true) {
         partNames.forEach(partName => {
             const filePath = `${folderPath}/${partName}.gltf`;
@@ -150,7 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const possibleNumbers = getPossibleNumbers(row, col, sudokuBoard); // Get valid numbers
                 possibleNumbers.forEach(num => {
                     const noteName = `${cellName}_New_Number_${num}`;
-                    loadParts([noteName], 'assets/AdditionalNumbers', notesGroup, 0x808080, true); // Load as notes
+                    console.log(`DEBUG - Adding note to: ${cellName}, Note: ${noteName}, Possible Number: ${num}`);
+                    loadParts([noteName], 'assets/AdditionalNumbers', notesGroup, 0x00008B, true); // Notes set to dark blue
                 });
             }
         });
@@ -186,18 +188,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (editableCells.has(intersected.name)) {
                 if (selectedCell === intersected) {
                     selectedCell.traverse((child) => {
-                        if (child.isMesh) child.material.color.set(0xffffff);
+                        if (child.isMesh) child.material.color.set(0xffffff);  // Reset cell to white
                     });
                     selectedCell = null;
                 } else {
                     if (selectedCell) {
                         selectedCell.traverse((child) => {
-                            if (child.isMesh) child.material.color.set(0xffffff);
+                            if (child.isMesh) child.material.color.set(0xffffff);  // Reset previous selection to white
                         });
                     }
                     selectedCell = intersected;
                     selectedCell.traverse((child) => {
-                        if (child.isMesh) child.material.color.set(0xffff00);
+                        if (child.isMesh) child.material.color.set(0xffff00);  // Highlight selected cell
                     });
                 }
             }
